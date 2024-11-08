@@ -12,6 +12,7 @@ import {
   getUserTag,
   revalidateDbCache,
 } from "@/lib/cache";
+import { removeTrailingSlash } from "@/lib/utils";
 import { and, eq, inArray, sql, count } from "drizzle-orm";
 import { BatchItem } from "drizzle-orm/batch";
 
@@ -33,7 +34,10 @@ export function getProductCountryGroups({
   return cacheFn({ productId, userId });
 }
 
-export function getProducts(userId: string, { limit }: { limit?: number } = {}) {
+export function getProducts(
+  userId: string,
+  { limit }: { limit?: number } = {}
+) {
   const cacheFn = dbCache(getProductsInternal, {
     tags: [getUserTag(userId, CACHE_TAGS.products)],
   });
@@ -239,47 +243,151 @@ export async function updateCountryDiscounts(
 }
 
 export function getProductCustomization({
-  productId, userId
-} : {
-  productId: string,
-  userId: string
+  productId,
+  userId,
+}: {
+  productId: string;
+  userId: string;
 }) {
   const cacheFn = dbCache(getProductCustomizationInternal, {
-    tags: [
-      getIdTag(productId, CACHE_TAGS.products),
-    ]
-  })
+    tags: [getIdTag(productId, CACHE_TAGS.products)],
+  });
 
-  return cacheFn({productId, userId})
+  return cacheFn({ productId, userId });
 }
 
-async function getProductCustomizationInternal({userId, productId} : {userId: string, productId: string}) {
+async function getProductCustomizationInternal({
+  userId,
+  productId,
+}: {
+  userId: string;
+  productId: string;
+}) {
   const data = await db.query.ProductTable.findFirst({
-    where: ({id, clerkUserId}, {and, eq}) => and(eq(id, productId), eq(clerkUserId, userId)),
-    with: {productCustomization: true,}
-  })
+    where: ({ id, clerkUserId }, { and, eq }) =>
+      and(eq(id, productId), eq(clerkUserId, userId)),
+    with: { productCustomization: true },
+  });
 
-  return data?.productCustomization
+  return data?.productCustomization;
 }
 
-export async function updateProductCustomization(data: Partial<typeof ProductCustomizationTable.$inferInsert>, {productId, userId}: {productId: string, userId: string}) {
-  const product = await getProduct({ id: productId, userId})
-  if(product == null) return
+export async function updateProductCustomization(
+  data: Partial<typeof ProductCustomizationTable.$inferInsert>,
+  { productId, userId }: { productId: string; userId: string }
+) {
+  const product = await getProduct({ id: productId, userId });
+  if (product == null) return;
 
-  await db.update(ProductCustomizationTable).set(data).where(eq(ProductCustomizationTable.productId, productId))
+  await db
+    .update(ProductCustomizationTable)
+    .set(data)
+    .where(eq(ProductCustomizationTable.productId, productId));
 
   revalidateDbCache({
     tag: CACHE_TAGS.products,
     userId,
-    id: productId
-  })
+    id: productId,
+  });
 }
 
 async function getProductCountInternal(userId: string) {
   const counts = await db
     .select({ productCount: count() })
     .from(ProductTable)
-    .where(eq(ProductTable.clerkUserId, userId))
+    .where(eq(ProductTable.clerkUserId, userId));
 
-  return counts[0]?.productCount ?? 0
+  return counts[0]?.productCount ?? 0;
+}
+
+export async function getProductForBanner({
+  id,
+  countryCode,
+  url,
+}: {
+  id: string;
+  countryCode: string;
+  url: string;
+}) {
+  const cacheFn = dbCache(getProductForBannerInternal, {
+    tags: [
+      getIdTag(id, CACHE_TAGS.products),
+      getGlobalTag(CACHE_TAGS.countries),
+      getGlobalTag(CACHE_TAGS.countryGroups),
+    ],
+  });
+
+  return cacheFn({
+    id,
+    countryCode,
+    url
+  });
+}
+
+async function getProductForBannerInternal({
+  id,
+  countryCode,
+  url,
+}: {
+  id: string;
+  countryCode: string;
+  url: string;
+}) {
+  const data = await db.query.ProductTable.findFirst({
+    where: ({ id: idCol, url: urlCol }, { eq, and }) =>
+      and(eq(idCol, id), eq(urlCol, removeTrailingSlash(url))),
+    columns: {
+      id: true,
+      clerkUserId: true,
+    },
+    with: {
+      productCustomization: true,
+      countryGroupDiscounts: {
+        columns: {
+          coupon: true,
+          discountPercentage: true,
+        },
+        with: {
+          countryGroup: {
+            columns: {},
+            with: {
+              countries: {
+                columns: {
+                  id: true,
+                  name: true,
+                },
+                limit: 1,
+                where: ({ code }, { eq }) => eq(code, countryCode),
+              },
+            },
+          },
+        },
+      },
+    },
+  });
+
+  const discount = data?.countryGroupDiscounts.find(
+    (discount) => discount.countryGroup.countries.length > 0
+  );
+  const country = discount?.countryGroup.countries[0];
+  const product =
+    data == null || data.productCustomization == null
+      ? undefined
+      : {
+          id: data.id,
+          clerkUserId: data.clerkUserId,
+          customization: data.productCustomization,
+        };
+
+  return {
+    country,
+    product,
+    discount:
+      discount == null
+        ? undefined
+        : {
+            coupon: discount.coupon,
+            percentage: discount.discountPercentage,
+          },
+  };
 }

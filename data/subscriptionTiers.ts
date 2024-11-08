@@ -52,3 +52,7 @@ export const subscriptionTiersInOrder = [
   subscriptionTiers.Standard,
   subscriptionTiers.Premium,
 ];
+
+export function getTierByPriceId(stripePriceId: string) {
+  return Object.values(subscriptionTiers).find(tier => tier.stripePriceId === stripePriceId)
+}
