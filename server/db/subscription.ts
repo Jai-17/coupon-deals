@@ -48,20 +48,26 @@ export async function getUserSubscriptionTier(userId: string) {
   return subscriptionTiers[subscription.tier];
 }
 
-export async function updateUserSubscription(where: SQL, data: Partial<typeof UserSubscriptionTable.$inferInsert>) {
-  const [updatedSubscription] = await db.update(UserSubscriptionTable).set(data).where(where).returning({
-    id: UserSubscriptionTable.id,
-    userId: UserSubscriptionTable.clerkUserId
-  })
+export async function updateUserSubscription(
+  where: SQL,
+  data: Partial<typeof UserSubscriptionTable.$inferInsert>
+) {
+  const [updatedSubscription] = await db
+    .update(UserSubscriptionTable)
+    .set(data)
+    .where(where)
+    .returning({
+      id: UserSubscriptionTable.id,
+      userId: UserSubscriptionTable.clerkUserId,
+    });
 
-  if(updatedSubscription != null) {
+  if (updatedSubscription != null) {
     revalidateDbCache({
       tag: CACHE_TAGS.subscription,
       userId: updatedSubscription.userId,
-      id: updatedSubscription.id
-    })
+      id: updatedSubscription.id,
+    });
   }
-
 }
 
 function getUserSubscriptionInternal(userId: string) {
