@@ -8,6 +8,8 @@ import { notFound } from "next/navigation";
 import { NextRequest } from "next/server";
 import { createElement } from "react";
 
+export const runtime = "edge";
+
 export async function GET(
   request: NextRequest,
   context: { params: { productId: string } }
@@ -29,15 +31,12 @@ export async function GET(
     url: requestingUrl,
   });
 
-  
   if (product == null) {
     return notFound();
   }
 
-  
-
   const canShowBanner = await canShowDiscountBanner(product.clerkUserId);
-  
+
   await createProductView({
     productId: product.id,
     countryId: country?.id,
@@ -47,7 +46,7 @@ export async function GET(
   if (!canShowBanner) return notFound();
 
   if (country == null || discount == null) return notFound();
-  
+
   return new Response(
     await getJavaScript(
       product,
