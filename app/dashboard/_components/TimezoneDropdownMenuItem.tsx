@@ -1,13 +1,13 @@
-import { DropdownMenuItem } from "@/components/ui/dropdown-menu"
-import { createURL } from "@/lib/utils"
-import Link from "next/link"
+import { DropdownMenuItem } from "@/components/ui/dropdown-menu";
+import { createURL } from "@/lib/utils";
+import Link from "next/link";
 
 export function TimezoneDropdownMenuItem({
   searchParams,
 }: {
-  searchParams: Record<string, string>
+  searchParams: Record<string, string>;
 }) {
-  const userTimezone = Intl.DateTimeFormat().resolvedOptions().timeZone
+  const userTimezone = Intl.DateTimeFormat().resolvedOptions().timeZone;
   return (
     <DropdownMenuItem asChild>
       <Link
@@ -18,5 +18,5 @@ export function TimezoneDropdownMenuItem({
         {userTimezone}
       </Link>
     </DropdownMenuItem>
-  )
+  );
 }
